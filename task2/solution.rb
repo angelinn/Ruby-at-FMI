@@ -103,7 +103,21 @@ end
 module DrunkenMathematician
   module_function
 
-  def meaningless()
+  def meaningless(n)
+    rationals = RationalSequence.new(n).to_a
+    primes = rationals.select { |rat| rat.numerator.prime? or rat.denominator.prime? }
+    not_primes = rationals - primes
+
+    primes.reduce { |a, b| a*b } / not_primes.reduce { |a, b| a*b }
+  end
+
+  def aimless(n)
+    primes = PrimeSequence.new(n).to_a
+    primes = primes.each_slice(2).to_a
+
+    primes[-1] << 1 if primes[-1].count == 1
+    rationals = primes.map { |prime| Rational(prime[0], prime[1]) }
+    rationals.reduce { |a, b| a + b }
   end
 end
 
@@ -116,5 +130,9 @@ end
 # sequence = FibonacciSequence.new(5, first: 0, second: 1)
 # puts sequence.to_a.join(', ') # => [0, 1, 1, 2, 3]
 
-seq = RationalSequence.new(15)
-seq.each { |n| puts n }
+# seq = RationalSequence.new(15)
+# seq.each { |n| puts n }
+
+# puts DrunkenMathematician.meaningless(6)
+
+puts DrunkenMathematician.aimless(4)
