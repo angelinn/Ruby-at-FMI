@@ -37,23 +37,23 @@ class RationalSequence
         return Rational(@num, @denom)
       end
 
-      @num, @denom = new_num_denom()
+      @num, @denom = generate_parts()
 
       @finished = true if @num == 1 or @denom == 1
       Rational(@num, @denom)
     end
 
-  def new_num_denom()
+  def generate_parts()
     @rising ? [@num + 1, @denom - 1] : [@num - 1, @denom + 1]
   end
 end
 
-class Fixnum
+class Integer
   def prime?
     return true if self == 2
     return false if self % 2 == 0 or self < 2
 
-    (3..self - 1).step(2) { |current| return false if self % current == 0 }
+    (3..self-1).step(2) { |current| return false if self % current == 0 }
     true
   end
 end
@@ -82,15 +82,17 @@ end
 class FibonacciSequence
   include Enumerable
 
-  def initialize(limit, first: 1, second: 0)
+  def initialize(limit, first: 1, second: 1)
     @limit = limit
     @first = first
     @second = second
   end
 
   def each
-    current, previous = @first, @second
-    total = 0
+    current, previous = @second, @first
+    total = 1
+
+    yield @first
 
     while total < @limit
       yield current
@@ -108,7 +110,10 @@ module DrunkenMathematician
     primes = rationals.select { |rat| rat.numerator.prime? or rat.denominator.prime? }
     not_primes = rationals - primes
 
-    primes.reduce { |a, b| a*b } / not_primes.reduce { |a, b| a*b }
+    primes_sum = primes.reduce { |a, b| a * b }
+    primes_sum = 1 if not primes_sum
+
+    primes_sum / not_primes.reduce { |a, b| a * b }
   end
 
   def aimless(n)
@@ -134,13 +139,14 @@ module DrunkenMathematician
   end
 end
 
+
 # sequence = PrimeSequence.new(5)
 # puts sequence.to_a.join(', ') # => [2, 3, 5, 7, 11]
 
 # sequence = FibonacciSequence.new(5)
 # puts sequence.to_a.join(', ') # => [1, 1, 2, 3, 5]
 
-# sequence = FibonacciSequence.new(5, first: 0, second: 1)
+# sequence = FibonacciSequence.new(5, first: 0 )
 # puts sequence.to_a.join(', ') # => [0, 1, 1, 2, 3]
 
 # seq = RationalSequence.new(15)
@@ -152,4 +158,6 @@ end
 
 # puts RationalSequence.new(0).to_a.join(', ')
 
-puts DrunkenMathematician.worthless(5)
+# puts DrunkenMathematician.worthless(5)
+
+# puts DrunkenMathematician.meaningless(1)
