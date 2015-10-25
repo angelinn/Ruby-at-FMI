@@ -11,7 +11,7 @@ class RationalSequence
     current = Rational(@num, @denom)
     total = [current]
 
-    yield current
+    yield current if @limit != 0
 
     while total.count < @limit
       current = iteration(total)
@@ -119,6 +119,19 @@ module DrunkenMathematician
     rationals = primes.map { |prime| Rational(prime[0], prime[1]) }
     rationals.reduce { |a, b| a + b }
   end
+
+  def worthless(n)
+    nth_fibonacci = FibonacciSequence.new(n).to_a[-1]
+    rationals = RationalSequence.new(n).to_a
+
+    sum = rationals.reduce { |a, b| a + b }
+    while sum > nth_fibonacci
+      rationals.pop
+      sum = rationals.reduce { |a, b| a + b }
+    end
+
+    rationals
+  end
 end
 
 # sequence = PrimeSequence.new(5)
@@ -135,4 +148,8 @@ end
 
 # puts DrunkenMathematician.meaningless(6)
 
-puts DrunkenMathematician.aimless(4)
+# puts DrunkenMathematician.aimless(4)
+
+# puts RationalSequence.new(0).to_a.join(', ')
+
+puts DrunkenMathematician.worthless(5)
