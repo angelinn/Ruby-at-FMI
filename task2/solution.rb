@@ -140,24 +140,24 @@ module DrunkenMathematician
 end
 
 
-# sequence = PrimeSequence.new(5)
-# puts sequence.to_a.join(', ') # => [2, 3, 5, 7, 11]
+sequence = PrimeSequence.new(5)
+puts sequence.to_a.join(', ') # => [2, 3, 5, 7, 11]
 
-# sequence = FibonacciSequence.new(5)
-# puts sequence.to_a.join(', ') # => [1, 1, 2, 3, 5]
+sequence = FibonacciSequence.new(5)
+puts sequence.to_a.join(', ') # => [1, 1, 2, 3, 5]
 
-# sequence = FibonacciSequence.new(5, first: 0 )
-# puts sequence.to_a.join(', ') # => [0, 1, 1, 2, 3]
+sequence = FibonacciSequence.new(5, first: 0 )
+puts sequence.to_a.join(', ') # => [0, 1, 1, 2, 3]
 
-# seq = RationalSequence.new(15)
-# seq.each { |n| puts n }
+seq = RationalSequence.new(15)
+seq.each { |n| puts n }
 
-# puts DrunkenMathematician.meaningless(6)
+puts DrunkenMathematician.meaningless(6)
 
-# puts DrunkenMathematician.aimless(4)
+puts DrunkenMathematician.aimless(4)
 
-# puts RationalSequence.new(0).to_a.join(', ')
+puts RationalSequence.new(0).to_a.join(', ')
 
-# puts DrunkenMathematician.worthless(5)
+puts DrunkenMathematician.worthless(5)
 
-# puts DrunkenMathematician.meaningless(1)
+puts DrunkenMathematician.meaningless(1)
