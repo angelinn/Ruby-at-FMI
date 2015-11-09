@@ -1,6 +1,8 @@
 
 class Card
   SUITS = [:diamonds, :spades, :clubs, :hearts].freeze
+  RANKS = Hash[((2..10).to_a + [:jack, :queen, :king, :ace])
+              .map.with_index.to_a]
 
   attr_reader :rank
   attr_reader :suit
@@ -21,8 +23,6 @@ end
 
 class Deck
   include Enumerable
-
-  attr_reader :cards
 
   def initialize(cards = nil)
     @cards = cards ? cards : generate_all_cards()
@@ -53,7 +53,9 @@ class Deck
   end
 
   def sort()
-    @cards.sort! { |a, b| [b.suit, b.rank] <=> [a.suit, a.rank] }
+    @cards.sort! do |a, b|
+      [b.suit, Card::RANKS[b.rank]] <=> [a.suit, Card::RANKS[a.rank]]
+    end
   end
 
   def to_s()
@@ -61,7 +63,10 @@ class Deck
   end
 
   def deal()
-    nil
+    hand = []
+    hand_size().times { hand << draw_top_card }
+
+    hand_class.new(hand)
   end
 
   def each()
@@ -69,11 +74,11 @@ class Deck
   end
 
   def generate_all_cards()
-    suits = [:spades, :hearts, :diamons, :clubs]
-    ranks = (2..10).to_a + [:jack, :queen, :king, :ace]
     cards = []
+    Card::SUITS.each do |suit|
+      Card::RANKS.keys.each { |rank| cards << Card.new(rank, suit) }
+    end
 
-    suits.each { |suit| ranks.each { |rank| cards << Card.new(rank, suit) } }
     cards
   end
 end
@@ -104,13 +109,12 @@ class WarDeck < Deck
   HAND_SIZE = 26
   TOTAL_CARDS = 52
 
-  def Mooo_sodas_ASDA()
+  def hand_size()
+    HAND_SIZE
   end
 
-  def deal()
-    hand = []
-    HAND_SIZE.times { hand << draw_top_card }
-    WarHand.new(hand)
+  def hand_class()
+    WarHand
   end
 end
 
@@ -135,6 +139,31 @@ class BeloteHand < Hand
     false
   end
 
+  def tierce?()
+    n_in_a_row(3)
+  end
+
+  def quarte?()
+    n_in_a_row(4)
+  end
+
+  def quint?()
+    n_in_a_row(5)
+  end
+
+  def carre_of_jacks?()
+    carre_of_x?(:jack)
+  end
+
+  def carre_of_nines?()
+    carre_of_x?(9)
+  end
+
+  def carre_of_aces?()
+    carre_of_x?(:ace)
+  end
+
+  private
   def n_in_a_row?(amount)
     @cards.sort! { |a, b| POWER[a.rank] <=> POWER[b.rank] }
     previous = @cards.first
@@ -150,32 +179,8 @@ class BeloteHand < Hand
     false
   end
 
-  def tierce?()
-    n_in_a_row(3)
-  end
-
-  def quarte?()
-    n_in_a_row(4)
-  end
-
-  def quint?()
-    n_in_a_row(5)
-  end
-
   def carre_of_x?(rank)
-    @cards.select { |card| card.rank == rank } .size == 4
-  end
-
-  def carre_of_jacks?()
-    carre_of_x?(:jack)
-  end
-
-  def carre_of_jacks?()
-    carre_of_x?(9)
-  end
-
-  def carre_of_jacks?()
-    carre_of_x?(:ace)
+    @cards.select { |card| card.rank == rank }.size == 4
   end
 end
 
@@ -183,16 +188,48 @@ class BeloteDeck < Deck
   HAND_SIZE = 8
   TOTAL_CARDS = 32
 
-  def deal()
+  def hand_size()
+    HAND_SIZE
+  end
+
+  def hand_class()
+    BeloteHand
   end
 end
 
-# cards = [Card.new(:ace, :spades),
-#          Card.new(2, :hearts),
-#          Card.new(3, :hearts),
-#          Card.new(4, :carre)]
+class SixtySixHand < Hand
+  def twenty?(trump_suit)
+    kings_and_queens?(trump_suit) { |one, other| one != other }
+  end
 
+  def forty?(trump_suit)
+    kings_and_queens?(trump_suit) { |one, other| one == other }
+  end
+
+  private
+  def kings_and_queens?(trump_suit)
+    kings = @cards.select { |c| c.rank == :king and yield c.suit, trump_suit }
+    kings.each do |king|
+      return true if kings.select do |card|
+        card.rank == :queen and card.suit == king.suit
+      end
+    end
+
+    false
+  end
+end
+
+class SixtySixDeck < Deck
+  TOTAL_CARDS = 24
+
+  def hand_size()
+    6
+  end
+
+  def hand_class()
+    SixtySixHand
+  end
+end
 
 deck = WarDeck.new()
-deck.shuffle()
-puts deck.deal.cards.join ', '
+puts deck.sort
