@@ -1,4 +1,8 @@
 
+###
+### Abstract
+###
+
 class Card
   SUITS = [:diamonds, :spades, :clubs, :hearts].freeze
   RANKS = Hash[((2..10).to_a + [:jack, :queen, :king, :ace])
@@ -53,33 +57,35 @@ class Deck
   end
 
   def sort()
+    power = ranks()
     @cards.sort! do |a, b|
-      [b.suit, Card::RANKS[b.rank]] <=> [a.suit, Card::RANKS[a.rank]]
+      [b.suit, power[b.rank]] <=> [a.suit, power[a.rank]]
     end
   end
 
   def to_s()
-    @cards.each { |card| puts card }
+    each { |card| card }
   end
 
   def deal()
-    hand = []
-    hand_size().times { hand << draw_top_card }
+     hand = []
+     hand_size().times { hand << draw_top_card unless size() == 0 }
 
     hand_class.new(hand)
   end
 
   def each()
+    return @cards.each unless block_given?
+
     @cards.each { |card| yield card }
   end
 
-  def generate_all_cards()
-    cards = []
-    Card::SUITS.each do |suit|
-      Card::RANKS.keys.each { |rank| cards << Card.new(rank, suit) }
-    end
+  def ranks()
+    Card::RANKS
+  end
 
-    cards
+  def generate_all_cards()
+    ranks().keys.product(Card::SUITS).map { |r, s| Card.new(r, s) }
   end
 end
 
@@ -95,13 +101,21 @@ class Hand
   end
 end
 
+######################
+
+#####
+##### War
+#####
+
 class WarHand < Hand
+  ALLOW_FACE_UP_COUNT = 3
+
   def play_card()
-    @cards.shift
+    @cards.delete(@cards.sample)
   end
 
   def allow_face_up?()
-    @cards.size <= 3
+    @cards.size <= ALLOW_FACE_UP_COUNT
   end
 end
 
@@ -116,14 +130,24 @@ class WarDeck < Deck
   def hand_class()
     WarHand
   end
+
+  def ranks()
+    Card::RANKS
+  end
 end
 
-class BeloteHand < Hand
-  POWER = Hash[[7, 8, 9, :jack, :queen, :king, 10, :ace].map.with_index.to_a]
+##########################
 
+#####
+##### Belote
+#####
+
+class BeloteHand < Hand
   def highest_of_suit(suit)
-    highest = 0
-    @cards.each { |card| highest = POWER[card] if card.rank > highest }
+    power = BeloteDeck::RANKS
+    highest = Card.new(7, :spades)
+    @cards.select { |c| c.suit == suit}
+          .each   { |c| highest = c if power[c.rank] > power[highest.rank] }
 
     highest
   end
@@ -131,24 +155,26 @@ class BeloteHand < Hand
   def belote?()
     kings = @cards.select { |card| card.rank == :king }
     kings.each do |king|
-      return true if kings.select do |card|
+      match = @cards.select do |card|
         card.rank == :queen and card.suit == king.suit
       end
+
+      return true if match.size != 0
     end
 
     false
   end
 
   def tierce?()
-    n_in_a_row(3)
+    n_in_a_row?(3)
   end
 
   def quarte?()
-    n_in_a_row(4)
+    n_in_a_row?(4)
   end
 
   def quint?()
-    n_in_a_row(5)
+    n_in_a_row?(5)
   end
 
   def carre_of_jacks?()
@@ -165,12 +191,13 @@ class BeloteHand < Hand
 
   private
   def n_in_a_row?(amount)
-    @cards.sort! { |a, b| POWER[a.rank] <=> POWER[b.rank] }
-    previous = @cards.first
+    power = BeloteDeck::RANKS
+    @cards.sort! { |a, b| power[a.rank] <=> power[b.rank] }
+    previous, matches = @cards.first, 0
 
     @cards.each do |current|
       matches = (current.suit == previous.suit and
-                 current > previous) ? matches += 1 : 0
+                 power[current.rank] > power[previous.rank]) ? matches += 1 : 0
 
       return true if matches == amount
       previous = current
@@ -185,6 +212,7 @@ class BeloteHand < Hand
 end
 
 class BeloteDeck < Deck
+  RANKS = Hash[[7, 8, 9, :jack, :queen, :king, 10, :ace].map.with_index.to_a]
   HAND_SIZE = 8
   TOTAL_CARDS = 32
 
@@ -195,20 +223,31 @@ class BeloteDeck < Deck
   def hand_class()
     BeloteHand
   end
+
+  def ranks()
+    RANKS
+  end
 end
+
+#######################
+
+#####
+##### SixtySix
+#####
 
 class SixtySixHand < Hand
   def twenty?(trump_suit)
-    kings_and_queens?(trump_suit) { |one, other| one != other }
+    kings_and_queens?(trump_suit, ->(x, y) { x != y })
   end
 
   def forty?(trump_suit)
-    kings_and_queens?(trump_suit) { |one, other| one == other }
+    kings_and_queens?(trump_suit, ->(x, y) { x == y })
   end
 
   private
-  def kings_and_queens?(trump_suit)
-    kings = @cards.select { |c| c.rank == :king and yield c.suit, trump_suit }
+  def kings_and_queens?(trump_suit, predicate)
+    kings = @cards.select { |c| c.rank == :king and predicate.(c.suit, trump_suit) }
+
     kings.each do |king|
       return true if kings.select do |card|
         card.rank == :queen and card.suit == king.suit
@@ -220,16 +259,23 @@ class SixtySixHand < Hand
 end
 
 class SixtySixDeck < Deck
+  RANKS = Hash[[9, :jack, :queen, :king, 10, :ace].map.with_index.to_a]
+  HAND_SIZE = 6
   TOTAL_CARDS = 24
 
   def hand_size()
-    6
+    HAND_SIZE
   end
 
   def hand_class()
     SixtySixHand
   end
+
+  def ranks()
+    RANKS
+  end
 end
 
 deck = WarDeck.new()
-puts deck.sort
+deck.shuffle
+puts deck.to_a
