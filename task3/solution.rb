@@ -29,7 +29,7 @@ class Deck
   include Enumerable
 
   def initialize(cards = nil)
-    @cards = cards ? cards : generate_all_cards()
+    @cards = cards ? cards.dup : generate_all_cards()
   end
 
   def size()
@@ -58,13 +58,11 @@ class Deck
 
   def sort()
     power = ranks()
-    @cards.sort! do |a, b|
-      [b.suit, power[b.rank]] <=> [a.suit, power[a.rank]]
-    end
+    @cards.sort! { |a, b| [b.suit, power[b.rank]] <=> [a.suit, power[a.rank]] }
   end
 
   def to_s()
-    each { |card| card }
+    each { |card| card.to_s }
   end
 
   def deal()
@@ -276,6 +274,7 @@ class SixtySixDeck < Deck
   end
 end
 
-deck = WarDeck.new()
+deck = Deck.new()
+
 deck.shuffle
 puts deck.to_a
