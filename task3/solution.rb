@@ -203,15 +203,19 @@ class BeloteHand < Hand
     grouped = @cards.sort! { |a, b| power[a.rank] <=> power[b.rank] }
                     .group_by { |card| card.suit }.values
 
-    return true if grouped.any? do |suited|
+    grouped.any? do |suited|
       next if suited.size < amount
 
       suited.each_cons(amount).any? do |con|
-        con.each_cons(2).all? { |a, b| power[b.rank] - power[a.rank] == 1 }
+        are_following_numbers?(con)
       end
     end
+  end
 
-    false
+  def are_following_numbers?(numbers)
+    numbers.each_cons(2).all? do |a, b|
+      BeloteDeck::RANKS[b.rank] - BeloteDeck::RANKS[a.rank] == 1
+    end
   end
 
   def carre_of_x?(rank)
@@ -283,8 +287,3 @@ class SixtySixDeck < Deck
     RANKS
   end
 end
-
-deck = Deck.new()
-
-deck.shuffle
-puts deck.to_a
