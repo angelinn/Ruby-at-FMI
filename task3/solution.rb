@@ -88,6 +88,8 @@ class Deck
 end
 
 class Hand
+  include Enumerable
+
   attr_reader :cards
 
   def initialize(cards)
@@ -96,6 +98,11 @@ class Hand
 
   def size()
     @cards.size
+  end
+
+  def each()
+    return @cards.each unless block_given?
+    @cards.each { |card| yield card }
   end
 end
 
@@ -113,7 +120,7 @@ class WarHand < Hand
   end
 
   def allow_face_up?()
-    @cards.size <= ALLOW_FACE_UP_COUNT
+    size() <= ALLOW_FACE_UP_COUNT
   end
 end
 
@@ -141,19 +148,21 @@ end
 #####
 
 class BeloteHand < Hand
+  CARRE_COUNT = 4
+
   def highest_of_suit(suit)
     power = BeloteDeck::RANKS
     highest = Card.new(7, :spades)
-    @cards.select { |c| c.suit == suit}
-          .each   { |c| highest = c if power[c.rank] > power[highest.rank] }
+    select { |c| c.suit == suit}
+      .each { |c| highest = c if power[c.rank] > power[highest.rank] }
 
     highest
   end
 
   def belote?()
-    kings = @cards.select { |card| card.rank == :king }
+    kings = select { |card| card.rank == :king }
     kings.each do |king|
-      match = @cards.select do |card|
+      match = select do |card|
         card.rank == :queen and card.suit == king.suit
       end
 
@@ -190,22 +199,23 @@ class BeloteHand < Hand
   private
   def n_in_a_row?(amount)
     power = BeloteDeck::RANKS
-    @cards.sort! { |a, b| power[a.rank] <=> power[b.rank] }
-    previous, matches = @cards.first, 0
 
-    @cards.each do |current|
-      matches = (current.suit == previous.suit and
-                 power[current.rank] > power[previous.rank]) ? matches += 1 : 0
+    grouped = @cards.sort! { |a, b| power[a.rank] <=> power[b.rank] }
+                    .group_by { |card| card.suit }.values
 
-      return true if matches == amount
-      previous = current
+    return true if grouped.any? do |suited|
+      next if suited.size < amount
+
+      suited.each_cons(amount).any? do |con|
+        con.each_cons(2).all? { |a, b| power[b.rank] - power[a.rank] == 1 }
+      end
     end
 
     false
   end
 
   def carre_of_x?(rank)
-    @cards.select { |card| card.rank == rank }.size == 4
+    select { |card| card.rank == rank }.size == CARRE_COUNT
   end
 end
 
@@ -244,7 +254,7 @@ class SixtySixHand < Hand
 
   private
   def kings_and_queens?(trump_suit, predicate)
-    kings = @cards.select { |c| c.rank == :king and predicate.(c.suit, trump_suit) }
+    kings = select { |c| c.rank == :king and predicat.e(c.suit, trump_suit) }
 
     kings.each do |king|
       return true if kings.select do |card|
