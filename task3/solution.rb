@@ -258,10 +258,10 @@ class SixtySixHand < Hand
 
   private
   def kings_and_queens?(trump_suit, predicate)
-    kings = select { |c| c.rank == :king and predicat.e(c.suit, trump_suit) }
+    kings = select { |c| c.rank == :king and predicate.(c.suit, trump_suit) }
 
     kings.each do |king|
-      return true if kings.select do |card|
+      return true if @cards.any? do |card|
         card.rank == :queen and card.suit == king.suit
       end
     end
