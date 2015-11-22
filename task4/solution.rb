@@ -34,7 +34,7 @@ class ObjectStore
   end
 
   def add(name, object)
-    @current_branch.pending[name] = object
+    @current_branch.pending[name] = Change.new(:add, object)
     OperationResult.new(ADD_SUCCESS % [name], true, object)
   end
 
@@ -42,7 +42,14 @@ class ObjectStore
     return OperationResult.new(COMMIT_ERROR, false) if @current_branch.pending.empty?
 
     object_count = @current_branch.pending.size
-    commit = Commit.new(message, @current_branch.pending)
+    objects = @current_branch.commits.empty? ? {} : @current_branch.commits.last.objects.dup
+
+    @current_branch.pending.each do |name, change|
+      objects[name] = change.value if change.type == :add
+      objects.delete(name) if change.type == :delete
+    end
+
+    commit = Commit.new(message, objects)
     @current_branch.commits << commit
     @current_branch.pending.clear
 
@@ -52,7 +59,7 @@ class ObjectStore
   def get(name)
     return OperationResult.new(NOT_COMMITED % name, false) if @current_branch.commits.empty?
 
-    object = @current_branch.commits.last.actions[name] if @current_branch.commits.last.actions.has_key?(name)
+    object = @current_branch.commits.last.objects[name]
 
     return OperationResult.new(NOT_COMMITED % name, false) if not object
     OperationResult.new(FOUND % name, true, object)
@@ -61,8 +68,8 @@ class ObjectStore
   def remove(name)
     return OperationResult.new(NOT_COMMITED % name, true) if @current_branch.commits.empty?
 
-    if (@current_branch.commits.last.actions.has_key?(name))
-      @current_branch.commits.last.actions.delete(name)
+    if (@current_branch.commits.last.objects[name])
+      @current_branch.pending[name] = Change.new(:delete)
       OperationResult.new(PENDING_REMOVAL % name, false)
     else
       OperationResult.new(NOT_COMMITED % name, true)
@@ -122,7 +129,7 @@ class Change
   attr_reader :type
   attr_reader :value
 
-  def initialize(type, value)
+  def initialize(type, value = nil)
     @type = type
     @value = value
   end
@@ -130,19 +137,15 @@ end
 
 class Commit
   attr_reader :message
-  attr_reader :actions
+  attr_reader :objects
   attr_reader :hash
   attr_reader :date
 
-  def initialize(message, actions)
+  def initialize(message, objects)
     @message = message
-    @actions = actions.dup
+    @objects = objects.dup
     @date = Time.now
     @hash = Digest::SHA1.hexdigest "#{@date.strftime('%a %b %-d %H:%M %Y %z')}#{message}"
-  end
-
-  def objects()
-    @actions.values
   end
 end
 
