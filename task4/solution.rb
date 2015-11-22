@@ -7,9 +7,11 @@ class ObjectStore
   HASH_MISSING = "Commit %s does not exist."
   COMMITTING = "Object %s is not being committed."
   PENDING_REMOVAL = "Added %s for removal."
-  HEAD_AT = "Head is not at %s."
+  HEAD_AT = "HEAD is now at %s."
   NO_COMMITS = "Branch %s does not have any commits yet."
   COMMIT_LOG_PATTERN = "Commit %s\nDate: %s\n\n\t%s\n\n"
+  NOT_COMMITED = "Object %s is not committed."
+  FOUND = "Found object %s."
 
   attr_accessor :branches
   attr_accessor :current_branch
@@ -28,28 +30,33 @@ class ObjectStore
   end
 
   def branch()
-    @branch_operator = BranchOperator.new(self) if not @branch_operator
+    @branch_operator = BranchManager.new(self) if not @branch_operator
     @branch_operator
   end
 
   def add(name, object)
     @current_branch.pending[name] = object
-    OperationResult.new(ADD_SUCCESS % [name], object)
+    OperationResult.new(ADD_SUCCESS % [name], true, object)
   end
 
   def commit(message)
     return OperationResult.new(COMMIT_ERROR, false) if @current_branch.pending.empty?
 
-    objects_count = @current_branch.pending.size
+    object_count = @current_branch.pending.size
     commit = Commit.new(message, @current_branch.pending)
     @current_branch.commits << commit
     @current_branch.pending.clear
 
-    OperationResult.new(COMMIT_SUCCESS % [message, objects_count], true, commit)
+    OperationResult.new(COMMIT_SUCCESS % [message, object_count], true, commit)
   end
 
   def get(name)
-     @current_branch.commits.select { |commit| commit.actions[name] if commit.actions.has_key?(name)} .last
+    puts "trying to get #{name}.."
+    object = @current_branch.commits.select { |commit| commit.actions[name] if commit.actions.has_key?(name)}
+
+    p object
+    return OperationResult.new(NOT_COMMITED % name, false)
+    OperationResult.new(FOUND % name, true, objects)
   end
 
   def remove(name)
@@ -62,12 +69,13 @@ class ObjectStore
   end
 
   def checkout(hash)
-    return OperationResult.new(HASH_MISSING % hash, false) if @commits.any? { |c| c.hash == hash}
+    return OperationResult.new(HASH_MISSING % hash, false) if @current_branch.commits.all? { |c| c.hash != hash}
 
-    while @current_branch.commits.last.hash != hash
-      @current_branch.commits.pop
-    end
-    return OperationResult.new(HEAD % hash, true, @current_branch.commits.last)
+    target = @current_branch.commits.select { |c| c.hash == hash }.first
+    index = @current_branch.commits.index(target)
+    @current_branch.commits = @current_branch.commits[0..index]
+
+    return OperationResult.new(HEAD_AT % hash, true, @current_branch.commits.last)
   end
 
   def log()
@@ -78,7 +86,7 @@ class ObjectStore
       commits_string += COMMIT_LOG_PATTERN % [c.hash, c.date.strftime('%a %b %-d %H:%M %Y %z'), c.message]
     end
 
-    commits_string.chomp!
+    commits_string.strip!
     OperationResult.new(commits_string, true)
   end
 
@@ -139,7 +147,7 @@ class Branch
   end
 end
 
-class BranchOperator
+class BranchManager
   EXISTS = "Branch %s already exists."
   CREATED = "Created branch %s."
   DOES_NOT_EXIST = "Branch %s does not exist."
