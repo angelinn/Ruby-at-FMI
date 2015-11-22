@@ -5,7 +5,6 @@ class ObjectStore
   COMMIT_SUCCESS = "%s\n\t%d objects changed"
   ADD_SUCCESS = "Added %s to stage."
   HASH_MISSING = "Commit %s does not exist."
-  COMMITTING = "Object %s is not being committed."
   PENDING_REMOVAL = "Added %s for removal."
   HEAD_AT = "HEAD is now at %s."
   NO_COMMITS = "Branch %s does not have any commits yet."
@@ -51,20 +50,22 @@ class ObjectStore
   end
 
   def get(name)
-    puts "trying to get #{name}.."
-    object = @current_branch.commits.select { |commit| commit.actions[name] if commit.actions.has_key?(name)}
+    return OperationResult.new(NOT_COMMITED % name, false) if @current_branch.commits.empty?
 
-    p object
-    return OperationResult.new(NOT_COMMITED % name, false)
-    OperationResult.new(FOUND % name, true, objects)
+    object = @current_branch.commits.last.actions[name] if @current_branch.commits.last.actions.has_key?(name)
+
+    return OperationResult.new(NOT_COMMITED % name, false) if not object
+    OperationResult.new(FOUND % name, true, object)
   end
 
   def remove(name)
-    if (@current_branch.pending.has_key?(name))
-      @current_branch.pending.delete(name)
-      OperationResult.new(COMMITTING % name, false)
+    return OperationResult.new(NOT_COMMITED % name, true) if @current_branch.commits.empty?
+
+    if (@current_branch.commits.last.actions.has_key?(name))
+      @current_branch.commits.last.actions.delete(name)
+      OperationResult.new(PENDING_REMOVAL % name, false)
     else
-      OperationResult.new(PENDING_REMOVAL % name, true)
+      OperationResult.new(NOT_COMMITED % name, true)
     end
   end
 
@@ -117,6 +118,16 @@ class OperationResult
   end
 end
 
+class Change
+  attr_reader :type
+  attr_reader :value
+
+  def initialize(type, value)
+    @type = type
+    @value = value
+  end
+end
+
 class Commit
   attr_reader :message
   attr_reader :actions
@@ -142,6 +153,7 @@ class Branch
 
   def initialize(branch_name)
       @pending = {}
+      @objects = {}
       @commits = []
       @name = branch_name
   end
