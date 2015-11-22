@@ -35,14 +35,18 @@ class ObjectStore
 
   def add(name, object)
     @current_branch.pending[name] = Change.new(:add, object)
-    OperationResult.new(ADD_SUCCESS % [name], true, object)
+    TrueResult.new(ADD_SUCCESS % name, object)
   end
 
   def commit(message)
-    return OperationResult.new(COMMIT_ERROR, false) if @current_branch.pending.empty?
+    return FalseResult.new(COMMIT_ERROR) if @current_branch.pending.empty?
 
     object_count = @current_branch.pending.size
-    data = @current_branch.commits.empty? ? {} : @current_branch.commits.last.data.dup
+    data = if @current_branch.commits.empty?
+             {}
+           else
+            @current_branch.commits.last.data.dup
+           end
 
     @current_branch.pending.each do |name, change|
       data[name] = change.value if change.type == :add
@@ -53,41 +57,41 @@ class ObjectStore
     @current_branch.commits << commit
     @current_branch.pending.clear
 
-    OperationResult.new(COMMIT_SUCCESS % [message, object_count], true, commit)
+    TrueResult.new(COMMIT_SUCCESS % [message, object_count], commit)
   end
 
   def get(name)
-    return OperationResult.new(NOT_COMMITED % name, false) if @current_branch.commits.empty?
+    return FalseResult.new(NOT_COMMITED % name) if @current_branch.commits.empty?
 
     object = @current_branch.commits.last.data[name]
 
-    return OperationResult.new(NOT_COMMITED % name, false) if not object
-    OperationResult.new(FOUND % name, true, object)
+    return FalseResult.new(NOT_COMMITED % name) if not object
+    TrueResult.new(FOUND % name, object)
   end
 
   def remove(name)
-    return OperationResult.new(NOT_COMMITED % name, false) if @current_branch.commits.empty?
+    return FalseResult.new(NOT_COMMITED % name) if @current_branch.commits.empty?
 
     if (@current_branch.commits.last.data[name])
       @current_branch.pending[name] = Change.new(:delete)
-      OperationResult.new(PENDING_REMOVAL % name, true)
+      TrueResult.new(PENDING_REMOVAL % name)
     else
-      OperationResult.new(NOT_COMMITED % name, false)
+      FalseResult.new(NOT_COMMITED % name)
     end
   end
 
   def checkout(hash)
-    return OperationResult.new(HASH_MISSING % hash, false) if @current_branch.commits.all? { |c| c.hash != hash}
+    return FalseResult.new(HASH_MISSING % hash) if @current_branch.commits.all? { |c| c.hash != hash}
 
     target = @current_branch.commits.select { |c| c.hash == hash }.first
     index = @current_branch.commits.index(target)
     @current_branch.commits = @current_branch.commits[0..index]
 
-    return OperationResult.new(HEAD_AT % hash, true, @current_branch.commits.last)
+    TrueResult.new(HEAD_AT % hash, @current_branch.commits.last)
   end
 
   def log()
-    return OperationResult.new(NO_COMMITS % @current_branch.name, false) if @current_branch.commits.empty?
+    return FalseResult.new(NO_COMMITS % @current_branch.name) if @current_branch.commits.empty?
 
     commits_string = ""
     @current_branch.commits.reverse_each do |c|
@@ -95,14 +99,14 @@ class ObjectStore
     end
 
     commits_string.strip!
-    OperationResult.new(commits_string, true)
+    TrueResult.new(commits_string)
   end
 
   def head()
-    return OperationResult.new(NO_COMMITS % @current_branch.name, false) if @current_branch.commits.empty?
+    return FalseResult.new(NO_COMMITS % @current_branch.name) if @current_branch.commits.empty?
 
       last = @current_branch.commits.last
-      OperationResult.new("#{last.message}", true, last)
+      TrueResult.new("#{last.message}", last)
   end
 end
 
@@ -122,6 +126,18 @@ class OperationResult
 
   def error?()
     not success?
+  end
+end
+
+class FalseResult < OperationResult
+  def initialize(message, result = nil)
+    super(message, false, result)
+  end
+end
+
+class TrueResult < OperationResult
+  def initialize(message, result = nil)
+    super(message, true, result)
   end
 end
 
@@ -158,10 +174,10 @@ class Branch
   attr_accessor :commits
   attr_reader :name
 
-  def initialize(branch_name)
+  def initialize(branch_name, commits = [])
       @pending = {}
       @objects = {}
-      @commits = []
+      @commits = commits
       @name = branch_name
   end
 end
@@ -171,7 +187,8 @@ class BranchManager
   CREATED = "Created branch %s."
   DOES_NOT_EXIST = "Branch %s does not exist."
   SWITCHED_TO = "Switched to branch %s."
-  REMOVED = "Removed branch %s"
+  REMOVED = "Removed branch %s."
+  CANT_REMOVE = 'Cannot remove current branch.'
 
 
   def initialize(repo)
@@ -179,56 +196,37 @@ class BranchManager
   end
 
   def create(name)
-    return OperationResult.new(EXISTS % name, false) if @repo.branches.any? { |b| b.name == name }
+    return FalseResult.new(EXISTS % name) if @repo.branches.any? { |b| b.name == name }
 
     @repo.branches << Branch.new(name, @repo.current_branch.commits)
-    OperationResult.new(CREATED % name, true)
+    TrueResult.new(CREATED % name)
   end
 
   def checkout(name)
-    return OperationResult.new(DOES_NOT_EXIST % name, false) if ! @repo.branches.any? { |b| b.name == name }
+    return FalseResult.new(DOES_NOT_EXIST % name) if !@repo.branches.any? { |b| b.name == name }
 
     @repo.current_branch = @repo.branches.select { |b| b.name == name }.first
-    OperationResult.new(SWITCHED_TO % name, true)
+    TrueResult.new(SWITCHED_TO % name)
   end
 
   def remove(name)
-    return OperationResult.new(DOES_NOT_EXIST % name, false) if ! @repo.branches.any? { |b| b.name == name }
+    return FalseResult.new(DOES_NOT_EXIST % name) if !@repo.branches.any? { |b| b.name == name }
+
+    return FalseResult.new(CANT_REMOVE) if @repo.current_branch.name == name
 
     @repo.branches.delete_if { |b| b.name == name }
-    OperationResult.new(REMOVED % name, true)
+    TrueResult.new(REMOVED % name)
   end
 
   def list()
     branches_list = ""
-    @repo.branches.sort!
+    @repo.branches.sort! { |a, b| a.name <=> b.name }
     @repo.branches.each do |b|
       prefix = (b.name == @repo.current_branch.name ? '* ' : '  ' )
       branches_list += prefix + b.name + "\n"
     end
 
     branches_list.chomp!
-    OperationResult.new(branches_list, true)
+    TrueResult.new(branches_list)
   end
 end
-
-repo = ObjectStore.init
-      repo.add('foo1', :bar1)
-      first_commit = repo.commit('First commit')
-
-      repo.add('foo2', :bar2)
-      second_commit = repo.commit('Second commit')
-
-      puts repo.log.message
-# puts repo.branch.list.message
-# puts repo.add('cool', 'very cool').message
-# puts repo.commit('pushing cool').message
-# puts repo.head.result
-# puts repo.head.success?
-# puts repo.head.error?
-# puts repo.add('someth else', 'kool').message
-# puts repo.add('meaningless', 'wut').message
-# puts repo.remove('meaningless').message
-# puts repo.commit('whatever').message
-# puts repo.get('someth else').message
-# puts repo.log
