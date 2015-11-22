@@ -42,11 +42,7 @@ class ObjectStore
     return FalseResult.new(COMMIT_ERROR) if @current_branch.pending.empty?
 
     object_count = @current_branch.pending.size
-    data = if @current_branch.commits.empty?
-             {}
-           else
-            @current_branch.commits.last.data.dup
-           end
+    data = @current_branch.empty? ? {} : @current_branch.last_commit.data.dup
 
     @current_branch.pending.each do |name, change|
       data[name] = change.value if change.type == :add
@@ -61,18 +57,18 @@ class ObjectStore
   end
 
   def get(name)
-    return FalseResult.new(NOT_COMMITED % name) if @current_branch.commits.empty?
+    return FalseResult.new(NOT_COMMITED % name) if @current_branch.empty?
 
-    object = @current_branch.commits.last.data[name]
+    object = @current_branch.last_commit.data[name]
 
     return FalseResult.new(NOT_COMMITED % name) if not object
     TrueResult.new(FOUND % name, object)
   end
 
   def remove(name)
-    return FalseResult.new(NOT_COMMITED % name) if @current_branch.commits.empty?
+    return FalseResult.new(NOT_COMMITED % name) if @current_branch.empty?
 
-    if (@current_branch.commits.last.data[name])
+    if (@current_branch.last_commit.data[name])
       @current_branch.pending[name] = Change.new(:delete)
       TrueResult.new(PENDING_REMOVAL % name)
     else
@@ -81,21 +77,24 @@ class ObjectStore
   end
 
   def checkout(hash)
-    return FalseResult.new(HASH_MISSING % hash) if @current_branch.commits.all? { |c| c.hash != hash}
+    hash_not_there = @current_branch.commits.all? { |c| c.hash != hash}
+    return FalseResult.new(HASH_MISSING % hash) if hash_not_there
 
     target = @current_branch.commits.select { |c| c.hash == hash }.first
     index = @current_branch.commits.index(target)
     @current_branch.commits = @current_branch.commits[0..index]
 
-    TrueResult.new(HEAD_AT % hash, @current_branch.commits.last)
+    TrueResult.new(HEAD_AT % hash, @current_branch.last_commit)
   end
 
   def log()
-    return FalseResult.new(NO_COMMITS % @current_branch.name) if @current_branch.commits.empty?
+    commits_none = @current_branch.empty?
+    return FalseResult.new(NO_COMMITS % @current_branch.name) if commits_none
 
     commits_string = ""
     @current_branch.commits.reverse_each do |c|
-      commits_string += COMMIT_LOG_PATTERN % [c.hash, c.date.strftime('%a %b %-d %H:%M %Y %z'), c.message]
+      params = [c.hash, c.date.strftime('%a %b %-d %H:%M %Y %z'), c.message]
+      commits_string += COMMIT_LOG_PATTERN % params
     end
 
     commits_string.strip!
@@ -103,10 +102,11 @@ class ObjectStore
   end
 
   def head()
-    return FalseResult.new(NO_COMMITS % @current_branch.name) if @current_branch.commits.empty?
+    commits_none = @current_branch.commits.empty?
+    return FalseResult.new(NO_COMMITS % @current_branch.name) if commits_none
 
-      last = @current_branch.commits.last
-      TrueResult.new("#{last.message}", last)
+    last = @current_branch.last_commit
+    TrueResult.new("#{last.message}", last)
   end
 end
 
@@ -161,7 +161,9 @@ class Commit
     @message = message
     @data = data.dup
     @date = Time.now
-    @hash = Digest::SHA1.hexdigest "#{@date.strftime('%a %b %-d %H:%M %Y %z')}#{message}"
+
+    hash_pattern = "#{@date.strftime('%a %b %-d %H:%M %Y %z')}#{message}"
+    @hash = Digest::SHA1.hexdigest hash_pattern
   end
 
   def objects()
@@ -180,6 +182,14 @@ class Branch
       @commits = commits
       @name = branch_name
   end
+
+  def last_commit()
+    @commits.last
+  end
+
+  def empty?()
+    @commits.empty?
+  end
 end
 
 class BranchManager
@@ -196,21 +206,24 @@ class BranchManager
   end
 
   def create(name)
-    return FalseResult.new(EXISTS % name) if @repo.branches.any? { |b| b.name == name }
+    repo_exists = @repo.branches.any? { |b| b.name == name }
+    return FalseResult.new(EXISTS % name) if repo_exists
 
     @repo.branches << Branch.new(name, @repo.current_branch.commits)
     TrueResult.new(CREATED % name)
   end
 
   def checkout(name)
-    return FalseResult.new(DOES_NOT_EXIST % name) if !@repo.branches.any? { |b| b.name == name }
+    not_exists = @repo.branches.all? { |b| b.name != name }
+    return FalseResult.new(DOES_NOT_EXIST % name) if not_exists
 
     @repo.current_branch = @repo.branches.select { |b| b.name == name }.first
     TrueResult.new(SWITCHED_TO % name)
   end
 
   def remove(name)
-    return FalseResult.new(DOES_NOT_EXIST % name) if !@repo.branches.any? { |b| b.name == name }
+    not_exists = @repo.branches.all? { |b| b.name != name }
+    return FalseResult.new(DOES_NOT_EXIST % name) if not_exists
 
     return FalseResult.new(CANT_REMOVE) if @repo.current_branch.name == name
 
