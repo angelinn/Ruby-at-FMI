@@ -42,14 +42,14 @@ class ObjectStore
     return OperationResult.new(COMMIT_ERROR, false) if @current_branch.pending.empty?
 
     object_count = @current_branch.pending.size
-    objects = @current_branch.commits.empty? ? {} : @current_branch.commits.last.objects.dup
+    data = @current_branch.commits.empty? ? {} : @current_branch.commits.last.data.dup
 
     @current_branch.pending.each do |name, change|
-      objects[name] = change.value if change.type == :add
-      objects.delete(name) if change.type == :delete
+      data[name] = change.value if change.type == :add
+      data.delete(name) if change.type == :delete
     end
 
-    commit = Commit.new(message, objects)
+    commit = Commit.new(message, data)
     @current_branch.commits << commit
     @current_branch.pending.clear
 
@@ -59,20 +59,20 @@ class ObjectStore
   def get(name)
     return OperationResult.new(NOT_COMMITED % name, false) if @current_branch.commits.empty?
 
-    object = @current_branch.commits.last.objects[name]
+    object = @current_branch.commits.last.data[name]
 
     return OperationResult.new(NOT_COMMITED % name, false) if not object
     OperationResult.new(FOUND % name, true, object)
   end
 
   def remove(name)
-    return OperationResult.new(NOT_COMMITED % name, true) if @current_branch.commits.empty?
+    return OperationResult.new(NOT_COMMITED % name, false) if @current_branch.commits.empty?
 
-    if (@current_branch.commits.last.objects[name])
+    if (@current_branch.commits.last.data[name])
       @current_branch.pending[name] = Change.new(:delete)
-      OperationResult.new(PENDING_REMOVAL % name, false)
+      OperationResult.new(PENDING_REMOVAL % name, true)
     else
-      OperationResult.new(NOT_COMMITED % name, true)
+      OperationResult.new(NOT_COMMITED % name, false)
     end
   end
 
@@ -137,15 +137,19 @@ end
 
 class Commit
   attr_reader :message
-  attr_reader :objects
+  attr_reader :data
   attr_reader :hash
   attr_reader :date
 
-  def initialize(message, objects)
+  def initialize(message, data)
     @message = message
-    @objects = objects.dup
+    @data = data.dup
     @date = Time.now
     @hash = Digest::SHA1.hexdigest "#{@date.strftime('%a %b %-d %H:%M %Y %z')}#{message}"
+  end
+
+  def objects()
+    @data.values
   end
 end
 
@@ -182,14 +186,14 @@ class BranchManager
   end
 
   def checkout(name)
-    return OperationResult.new(DOES_NOT_EXIST % name, false) if !@repo.branches.any? { |b| b.name == name }
+    return OperationResult.new(DOES_NOT_EXIST % name, false) if ! @repo.branches.any? { |b| b.name == name }
 
     @repo.current_branch = @repo.branches.select { |b| b.name == name }.first
     OperationResult.new(SWITCHED_TO % name, true)
   end
 
   def remove(name)
-    return OperationResult.new(DOES_NOT_EXIST % name, false) if !@repo.branches.any? { |b| b.name == name }
+    return OperationResult.new(DOES_NOT_EXIST % name, false) if ! @repo.branches.any? { |b| b.name == name }
 
     @repo.branches.delete_if { |b| b.name == name }
     OperationResult.new(REMOVED % name, true)
