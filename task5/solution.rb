@@ -47,6 +47,14 @@ module TurtleGraphics
       instance_eval &block
 
       return @canvas unless drawer
+
+      str = ""
+      @canvas.each do |row|
+        row.each { |cell| str += drawer.symbols[cell] }
+        str += "\n"
+      end
+
+      str
     end
 
     def move()
@@ -73,28 +81,37 @@ module TurtleGraphics
 
       @looks_at = orientation
     end
+  end
 
-    module Canvas
-      class ASCII
-        def initialize(symbols)
-        end
-      end
+  module Canvas
+    class ASCII
+      attr_reader :symbols
 
-      class HTML
-        def initialize(size)
-        end
+      def initialize(symbols)
+        @symbols = symbols
       end
     end
 
+    class HTML
+      def initialize(size)
+      end
+    end
   end
 end
 
-canvas = TurtleGraphics::Turtle.new(3, 3).draw do
+ascii_canvas = TurtleGraphics::Canvas::ASCII.new([' ', '-', '=', '#'])
+ascii = TurtleGraphics::Turtle.new(2, 2).draw(ascii_canvas) do
   move
   turn_right
   move
+  2.times { turn_right }
+  move
   turn_left
+  move
+  turn_left
+  move
+  2.times { turn_right }
   move
 end
 
-p canvas
+puts ascii
