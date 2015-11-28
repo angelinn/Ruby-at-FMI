@@ -4,10 +4,6 @@ module TurtleGraphics
     attr_accessor :y
 
     def initialize(x, y)
-      set(x, y)
-    end
-
-    def set(x, y)
       @x = x
       @y = y
     end
@@ -31,10 +27,9 @@ module TurtleGraphics
     def initialize(rows, columns)
       @rows = rows
       @columns = columns
-      @position = Point.new(0, 0)
+      @spawned = false
 
       init_canvas()
-      spawn_at(0, 0)
       look(:right)
     end
 
@@ -47,19 +42,19 @@ module TurtleGraphics
       instance_eval &block
 
       return @canvas unless drawer
-
-      str = ""
-      @canvas.each do |row|
-        row.each { |cell| str += drawer.symbols[cell] }
-        str += "\n"
-      end
-
-      str
+      drawer.to_canvas(@canvas)
     end
 
     def move()
-      @position = @position.next @looks_at
-      spawn_at(@position.x, @position.y)
+      unless @spawned
+        spawn_at(0, 0)
+      end
+
+      next_position = @position.next(@looks_at)
+      next_position.x %= @rows
+      next_position.y %= @columns
+
+      spawn_at(next_position.x, next_position.y)
     end
 
     def turn_left()
@@ -71,12 +66,14 @@ module TurtleGraphics
     end
 
     def spawn_at(row, column)
+      @spawned = true
+      @position = Point.new(row, column)
       @canvas[row][column] += 1
     end
 
     def look(orientation)
       unless (DIRECTIONS.include? orientation)
-        raise ArgumentError, "#{orientation} is not a valid direction."
+        raise ArgumentError, "'#{orientation}' is not a valid direction."
       end
 
       @looks_at = orientation
@@ -85,33 +82,82 @@ module TurtleGraphics
 
   module Canvas
     class ASCII
-      attr_reader :symbols
-
       def initialize(symbols)
         @symbols = symbols
+      end
+
+      def to_canvas(canvas)
+        asci = ""
+        canvas.each do |row|
+          row.each { |cell| asci += drawer.symbols[cell] }
+          asci += "\n"
+        end
+
+        asci
       end
     end
 
     class HTML
-      def initialize(size)
+      HEADER = '<!DOCTYPE html><html><head>' \
+               '<title>Turtle graphics</title>%s</head>'
+
+      CSS    = '<style>table {border-spacing: 0;} tr{padding: 0;}' \
+               'td {width: %spx;height: %spx;background-color: black;' \
+               'padding: 0;}</style>'
+
+      ENTRY  = '<td style="opacity: %s"></td>'
+
+
+      def initialize(td_size)
+        @document = HEADER % (CSS % [td_size, td_size])
+      end
+
+      def to_canvas(canvas)
+        @document += '<body><table>'
+
+        canvas.each do |row|
+          @document += '<tr>'
+
+          row.each do |cell|
+            @document += ENTRY % format('%.2f', (cell / row.max rescue 0))
+          end
+          @document += '</tr>'
+        end
+
+        @document += '</table></body></html>'
       end
     end
   end
 end
 
-ascii_canvas = TurtleGraphics::Canvas::ASCII.new([' ', '-', '=', '#'])
-ascii = TurtleGraphics::Turtle.new(2, 2).draw(ascii_canvas) do
-  move
-  turn_right
-  move
-  2.times { turn_right }
-  move
-  turn_left
-  move
-  turn_left
-  move
-  2.times { turn_right }
-  move
-end
+# html_canvas = TurtleGraphics::Canvas::HTML.new(5)
+# html = TurtleGraphics::Turtle.new(3, 3).draw(html_canvas) do
+#   move
+#   turn_right
+#   move
+#   turn_left
+#   move
+# end
 
-puts ascii
+# p html
+
+canvas = TurtleGraphics::Canvas::HTML.new(5)
+html = TurtleGraphics::Turtle.new(200, 200).draw(canvas) do
+  spawn_at 100, 100
+
+  step = 0
+
+  4300.times do
+    is_left = (((step & -step) << 1) & step) != 0
+
+    if is_left
+      turn_left
+    else
+      turn_right
+    end
+    step += 1
+
+    move
+  end
+end
+File.write("dragon.html", html)
