@@ -82,16 +82,22 @@ module TurtleGraphics
     class ASCII
       def initialize(symbols)
         @symbols = symbols
+        @step = 1.0 / (symbols.size - 1)
       end
 
       def to_canvas(canvas)
         asci = ""
         canvas.each do |row|
-          row.each { |cell| asci += drawer.symbols[cell] }
+          row.each { |cell| asci += pick_symbol(cell, row.max) }
           asci += "\n"
         end
 
         asci
+      end
+
+      def pick_symbol(cell, max)
+        intensity = max == 0 ? max : cell.to_f / max
+        @symbols[(intensity / @step).floor]
       end
     end
 
@@ -144,24 +150,24 @@ end
 
 # p html
 
-# canvas = TurtleGraphics::Canvas::HTML.new(5)
-# html = TurtleGraphics::Turtle.new(200, 200).draw(canvas) do
-#   spawn_at 100, 100
+canvas = TurtleGraphics::Canvas::HTML.new(5)
+html = TurtleGraphics::Turtle.new(200, 200).draw(TurtleGraphics::Canvas::ASCII.new([' ', '-', '=', '#'])) do
+  spawn_at 100, 100
 
-#   step = 0
+  step = 0
 
-#   4300.times do
-#     is_left = (((step & -step) << 1) & step) != 0
+  4300.times do
+    is_left = (((step & -step) << 1) & step) != 0
 
-#     if is_left
-#       turn_left
-#     else
-#       turn_right
-#     end
-#     step += 1
+    if is_left
+      turn_left
+    else
+      turn_right
+    end
+    step += 1
 
-#     move
-#   end
-# end
+    move
+  end
+end
 
-# File.write("dragon.html", html)
+File.write("dragon.html", html)
