@@ -29,11 +29,11 @@ module TurtleGraphics
       @columns = columns
       @spawned = false
 
-      init_canvas()
+      init_canvas
       look(:right)
     end
 
-    def init_canvas()
+    def init_canvas
       @canvas = []
       @rows.times { @canvas << Array.new(@columns, 0) }
     end
@@ -45,10 +45,8 @@ module TurtleGraphics
       drawer.to_canvas(@canvas)
     end
 
-    def move()
-      unless @spawned
-        spawn_at(0, 0)
-      end
+    def move
+      spawn_at(0, 0) unless @spawned
 
       next_position = @position.next(@looks_at)
       next_position.x %= @rows
@@ -57,11 +55,11 @@ module TurtleGraphics
       spawn_at(next_position.x, next_position.y)
     end
 
-    def turn_left()
+    def turn_left
       look(DIRECTIONS[DIRECTIONS.index(@looks_at) - 1])
     end
 
-    def turn_right()
+    def turn_right
       look(DIRECTIONS[(DIRECTIONS.index(@looks_at) + 1) % DIRECTIONS.size])
     end
 
@@ -119,12 +117,17 @@ module TurtleGraphics
           @document += '<tr>'
 
           row.each do |cell|
-            @document += ENTRY % format('%.2f', (cell / row.max rescue 0))
+            opacity = calculate_opacity(cell, row.max)
+            @document += ENTRY % format('%.2f', opacity)
           end
           @document += '</tr>'
         end
 
         @document += '</table></body></html>'
+      end
+
+      def calculate_opacity(cell, max)
+        max == 0 ? max : cell.to_f / max
       end
     end
   end
@@ -141,23 +144,24 @@ end
 
 # p html
 
-canvas = TurtleGraphics::Canvas::HTML.new(5)
-html = TurtleGraphics::Turtle.new(200, 200).draw(canvas) do
-  spawn_at 100, 100
+# canvas = TurtleGraphics::Canvas::HTML.new(5)
+# html = TurtleGraphics::Turtle.new(200, 200).draw(canvas) do
+#   spawn_at 100, 100
 
-  step = 0
+#   step = 0
 
-  4300.times do
-    is_left = (((step & -step) << 1) & step) != 0
+#   4300.times do
+#     is_left = (((step & -step) << 1) & step) != 0
 
-    if is_left
-      turn_left
-    else
-      turn_right
-    end
-    step += 1
+#     if is_left
+#       turn_left
+#     else
+#       turn_right
+#     end
+#     step += 1
 
-    move
-  end
-end
-File.write("dragon.html", html)
+#     move
+#   end
+# end
+
+# File.write("dragon.html", html)
