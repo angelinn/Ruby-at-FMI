@@ -1,5 +1,6 @@
 module LazyMode
-  def create_file(name, &block)
+
+  def self.create_file(name, &block)
     file = File.new(name)
     file.instance_eval &block
     file
@@ -36,14 +37,27 @@ module LazyMode
     attr_reader :file_name
     attr_reader :tags
 
-    attr_accessor :body
-    attr_accessor :status
-
-
     def initialize(header, file_name, *tags)
       @header = header
       @file_name = file_name
       @tags = tags
+      @status = :topostpone
+      @body = ''
+    end
+
+    def scheduled(date=nil)
+      return @scheduled unless date
+      @scheduled = Date.new(date)
+    end
+
+    def status(status=nil)
+      return @status unless status
+      @status = status
+    end
+
+    def body(body=nil)
+      return @body unless body
+      @body = body
     end
   end
 
@@ -56,14 +70,35 @@ module LazyMode
       @notes = []
     end
 
-    def note(header, &block)
-      @notes << Note.new(header, @name)
+    def note(header, *tags, &block)
+      @notes << Note.new(header, @name, *tags)
       @notes.last.instance_eval &block
     end
 
   end
 end
 
-a = LazyMode::Date.new('1994-5-6')
-puts "Day: #{a.day} Month: #{a.month} Year: #{a.year}"
-puts a.to_s
+file = LazyMode.create_file('work') do
+  note 'sleep', :important, :wip do
+    scheduled '2012-08-07'
+    status :postponed
+    body 'Try sleeping more at work'
+  end
+
+
+  note 'useless activity' do
+    scheduled '2012-08-07'
+  end
+end
+
+p file.name                  # => 'work'
+p file.notes.size            # => 2
+p file.notes.first.file_name # => 'work'
+p file.notes.first.header    # => 'sleep'
+p file.notes.first.tags      # => [:important, :wip]
+p file.notes.first.status    # => :postponed
+p file.notes.first.body      # => 'Try sleeping more at work'
+p file.notes.last.file_name  # => 'work'
+p file.notes.last.header     # => 'useless activity'
+p file.notes.last.tags       # => []
+p file.notes.last.status     # => :topostpone
