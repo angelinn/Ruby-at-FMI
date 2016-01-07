@@ -16,13 +16,25 @@ class Spreadsheet
   end
 
   def cell_at(cell_index)
-    scanned = cell_index.scan(/([A-Z]+)([0-9]+)/)
-    raise Error, "Invalid index #{cell_index}." if scanned.empty?
-
-    row, col = parse_row(scanned.first.first), scanned.first.last.to_i - 1
+    coords = get_row_col(cell_index)
+    row, col = coords[:row], coords[:col]
 
     raise Error, "Cell #{cell_index} does not exist." unless @cells[row][col]
     @cells[row][col]
+  end
+
+  def [](cell_index)
+    calculate_expression(cell_at(cell_index))
+  end
+
+  def to_s
+    tab = ""
+    @cells.each do |row|
+      row.each { |cell| tab << "#{calculate_expression(cell)}\t" }
+      tab.chop!
+      tab << "\n"
+    end
+    tab.chop!
   end
 
   private
@@ -50,11 +62,22 @@ class Spreadsheet
     index.to_i - 1
   end
 
+  def calculate_expression(expression)
+    expression
+  end
+
+  def get_row_col(cell_index)
+    scanned = cell_index.scan(/([A-Z]+)([0-9]+)/)
+    raise Error, "Invalid index #{cell_index}." if scanned.empty?
+
+    { :row => parse_row(scanned.first.first),
+      :col => scanned.first.last.to_i - 1 }
+  end
 end
 
 
 str = "\ncell1\tcell2\tcell3\n\nanother1  another2"
 a = Spreadsheet.new(str)
 p a.cell_at('A1')
-p a.cell_at('B2')
-
+p a['B2']
+p a.to_s
