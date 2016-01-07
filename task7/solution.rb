@@ -5,10 +5,9 @@ class Spreadsheet
   attr_accessor :cells
 
   def initialize(sheet = nil)
-    @cells = []
-
     return unless sheet
-    parse_sheet(sheet)
+    @cells = []
+    SheetUtilities.parse_sheet(@cells, sheet)
   end
 
   def empty?
@@ -16,8 +15,8 @@ class Spreadsheet
   end
 
   def cell_at(cell_index)
-    coords = get_row_col(cell_index)
-    row, col = coords[:row], coords[:col]
+    coordinates = get_row_col(cell_index)
+    row, col = coordinates[:row], coordinates[:col]
 
     raise Error, "Cell #{cell_index} does not exist." unless @cells[row][col]
     @cells[row][col]
@@ -38,18 +37,33 @@ class Spreadsheet
   end
 
   private
-  def parse_sheet(sheet)
-      sheet.strip.split("\n").each do |row|
+
+  def calculate_expression(expression)
+    expression
+  end
+
+  def get_row_col(cell_index)
+    scanned = cell_index.scan(/([A-Z]+)([0-9]+)/)
+    raise Error, "Invalid index #{cell_index}." if scanned.empty?
+
+    { :row => SheetUtilities.parse_row(scanned.first.first),
+      :col => scanned.first.last.to_i - 1 }
+  end
+end
+
+class SheetUtilities
+  def self.parse_sheet(cells, sheet)
+    sheet.strip.split("\n").each do |row|
       next if row.empty?
       delimiter = row.include?("\t") ? "\t" : "  "
 
       current = []
       row.strip.split(delimiter).each { |cell| current << cell.strip }
-      @cells << current
+      cells << current
     end
   end
 
-  def parse_row(row)
+  def self.parse_row(row)
     index = 0
 
     if row.size > 1
@@ -61,20 +75,7 @@ class Spreadsheet
     index += row[row.size - 1].ord - ('A'.ord - 1)
     index.to_i - 1
   end
-
-  def calculate_expression(expression)
-    expression
-  end
-
-  def get_row_col(cell_index)
-    scanned = cell_index.scan(/([A-Z]+)([0-9]+)/)
-    raise Error, "Invalid index #{cell_index}." if scanned.empty?
-
-    { :row => parse_row(scanned.first.first),
-      :col => scanned.first.last.to_i - 1 }
-  end
 end
-
 
 str = "\ncell1\tcell2\tcell3\n\nanother1  another2"
 a = Spreadsheet.new(str)
