@@ -77,8 +77,87 @@ class SheetUtilities
   end
 end
 
-str = "\ncell1\tcell2\tcell3\n\nanother1  another2"
-a = Spreadsheet.new(str)
+class Formula
+  LESS = "Wrong number of arguments for 'FOO': expected at least %s, got %s"
+  MORE = "Wrong number of arguments for 'FOO': expected %s, got %s"
+  attr_accessor :name
+  attr_accessor :arguments_count
+
+  def calculate(*args)
+    raise StandardError, 'base class method should not be called'
+  end
+
+  def check_arguments
+    if args.count < @arguments_count
+      raise Spreadsheet::Error, LESS % [@arguments_count, args.count]
+    end
+
+    if args.count > @arguments_count
+    raise Spreadsheet::Error, MORE % [@arguments_count, args.count]
+    end
+  end
+end
+
+class Add < Formula
+  def initialize
+    @name = 'ADD'
+    @arguments_count = 0
+  end
+
+  def calculate(*args)
+    args.reduce { |a, b| a + b }
+  end
+end
+
+class Multiply < Formula
+  def initialize
+    @name = 'MULTIPLY'
+    @arguments_count = 0
+  end
+
+  def calculate(*args)
+    args.reduce { |a, b| a * b }
+  end
+end
+
+class Subtract < Formula
+  def initialize
+    @name = 'SUBTRACT'
+    @arguments_count = 2
+  end
+
+  def calculate(*args)
+    check_arguments
+    args.first - args.last
+  end
+end
+
+class Divide < Formula
+  def initialize
+    @name = 'DIVIDE'
+    @arguments_count = 2
+  end
+
+  def calculate(*args)
+    check_arguments
+    args.first / args.last
+  end
+end
+
+class Mod < Formula
+  def initialize
+    @name = 'MOD'
+    @arguments_count = 2
+  end
+
+  def calculate(*args)
+    check_arguments
+    args.first % args.last
+  end
+end
+
+string = "\ncell1\tcell2\tcell3\n\nanother1  another2"
+a = Spreadsheet.new(string)
 p a.cell_at('A1')
 p a['B2']
 p a.to_s
