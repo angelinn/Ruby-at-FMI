@@ -42,11 +42,9 @@ class Spreadsheet
     matches = expression.match(/^=(\w+)\(((\s*[0-9\w]\s*,?)+)+\)$/)
 
     raise Error, "Invalid expression '#{expression}'" if matches.size == 0
+    formula = Formulas.get_formula(matches[1])
 
-    function = matches[1]
-    formula = FormulaFactory.get_formula(function)
-    args = matches[2].split(',')
-    args = args.map do |argument|
+    args = matches[2].split(',').map do |argument|
       argument = get_by_cell_index(argument) if argument =~ /[A-Z]+[0-9]+/
       argument = argument.strip.to_i
     end
@@ -59,6 +57,7 @@ class Spreadsheet
 
     col = SheetUtilities.parse_row(scanned.first.first)
     row = scanned.first.last.to_i - 1
+    raise Error, "Cell '#{cell_index}' does not exist." unless SheetUtilities.exists?(cells, row, col)
     @cells[row][col]
   end
 end
@@ -87,100 +86,98 @@ class SheetUtilities
     index += row[row.size - 1].ord - ('A'.ord - 1)
     index.to_i - 1
   end
+
+  def self.exists?(cells, row, col)
+    return false unless cells[row]
+    cells[row][col] != nil
+  end
 end
 
-class Formula
-  LESS = "Wrong number of arguments for 'FOO': expected at least %s, got %s"
-  MORE = "Wrong number of arguments for 'FOO': expected %s, got %s"
-
-  attr_accessor :name
-  attr_accessor :arguments_count
-
-  def calculate(*args)
-    raise StandardError, 'base class method should not be called'
+module Formulas
+  def self.get_formula(formula)
+    object = Formulas.const_get(formula.downcase.capitalize).new rescue nil
+    raise Spreadsheet::Error, "Unknown formula #{formula}" unless object
+    object
   end
 
-  def check_arguments(args)
-    if args.count < @arguments_count
-      raise Spreadsheet::Error, LESS % [@arguments_count, args.count]
+  class Formula
+    LESS = "Wrong number of arguments for 'FOO': expected at least %s, got %s"
+    MORE = "Wrong number of arguments for 'FOO': expected %s, got %s"
+
+    attr_accessor :name
+    attr_accessor :arguments_count
+
+    def calculate(*args)
+      raise StandardError, 'base class method should not be called'
     end
 
-    if args.count > @arguments_count
-    raise Spreadsheet::Error, MORE % [@arguments_count, args.count]
+    def check_arguments(args)
+      if args.count < @arguments_count
+        raise Spreadsheet::Error, LESS % [@arguments_count, args.count]
+      end
+
+      if args.count > @arguments_count
+      raise Spreadsheet::Error, MORE % [@arguments_count, args.count]
+      end
+    end
+  end
+
+  class Add < Formula
+    def initialize
+      @name = 'ADD'
+      @arguments_count = 0
+    end
+
+    def calculate(*args)
+      p args
+      args.reduce { |a, b| a + b }
+    end
+  end
+
+  class Multiply < Formula
+    def initialize
+      @name = 'MULTIPLY'
+      @arguments_count = 0
+    end
+
+    def calculate(*args)
+      args.reduce { |a, b| a * b }
+    end
+  end
+
+  class Subtract < Formula
+    def initialize
+      @name = 'SUBTRACT'
+      @arguments_count = 2
+    end
+
+    def calculate(*args)
+      check_arguments(args)
+      args.first - args.last
+    end
+  end
+
+  class Divide < Formula
+    def initialize
+      @name = 'DIVIDE'
+      @arguments_count = 2
+    end
+
+    def calculate(*args)
+      check_arguments(args)
+      args.first.to_f / args.last
+    end
+  end
+
+  class Mod < Formula
+    def initialize
+      @name = 'MOD'
+      @arguments_count = 2
+    end
+
+    def calculate(*args)
+      check_arguments(args)
+      args.first % args.last
     end
   end
 end
-
-class Add < Formula
-  def initialize
-    @name = 'ADD'
-    @arguments_count = 0
-  end
-
-  def calculate(*args)
-    p args
-    args.reduce { |a, b| a + b }
-  end
-end
-
-class Multiply < Formula
-  def initialize
-    @name = 'MULTIPLY'
-    @arguments_count = 0
-  end
-
-  def calculate(*args)
-    args.reduce { |a, b| a * b }
-  end
-end
-
-class Subtract < Formula
-  def initialize
-    @name = 'SUBTRACT'
-    @arguments_count = 2
-  end
-
-  def calculate(*args)
-    check_arguments(args)
-    args.first - args.last
-  end
-end
-
-class Divide < Formula
-  def initialize
-    @name = 'DIVIDE'
-    @arguments_count = 2
-  end
-
-  def calculate(*args)
-    check_arguments(args)
-    args.first.to_f / args.last
-  end
-end
-
-class Mod < Formula
-  def initialize
-    @name = 'MOD'
-    @arguments_count = 2
-  end
-
-  def calculate(*args)
-    check_arguments(args)
-    args.first % args.last
-  end
-end
-
-class FormulaFactory
-  def self.get_formula(name)
-      case name
-      when 'ADD' then Add.new
-      when 'SUBTRACT' then Subtract.new
-      when 'MULTIPLY' then Multiply.new
-      when 'MOD' then Mod.new
-      when 'DIVIDE' then Divide.new
-
-      else raise Spreadsheet::Error, "Unknown function '#{name}'"
-    end
-  end
-end
-
