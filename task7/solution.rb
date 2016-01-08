@@ -15,11 +15,10 @@ class Spreadsheet
   end
 
   def cell_at(cell_index)
-    coordinates = get_row_col(cell_index)
-    row, col = coordinates[:row], coordinates[:col]
+    cell = get_by_cell_index(cell_index)
 
-    raise Error, "Cell #{cell_index} does not exist." unless @cells[row][col]
-    @cells[row][col]
+    raise Error, "Cell #{cell_index} does not exist." unless cell
+    cell
   end
 
   def [](cell_index)
@@ -39,15 +38,28 @@ class Spreadsheet
   private
 
   def calculate_expression(expression)
-    expression
+    return expression if expression[0] != '='
+    matches = expression.match(/^=(\w+)\(((\s*[0-9\w]\s*,?)+)+\)$/)
+
+    raise Error, "Invalid expression '#{expression}'" if matches.size == 0
+
+    function = matches[1]
+    formula = FormulaFactory.get_formula(function)
+    args = matches[2].split(',')
+    args = args.map do |argument|
+      argument = get_by_cell_index(argument) if argument =~ /[A-Z]+[0-9]+/
+      argument = argument.strip.to_i
+    end
+    formula.calculate(*args)
   end
 
-  def get_row_col(cell_index)
+  def get_by_cell_index(cell_index)
     scanned = cell_index.scan(/([A-Z]+)([0-9]+)/)
     raise Error, "Invalid index #{cell_index}." if scanned.empty?
 
-    { :row => SheetUtilities.parse_row(scanned.first.first),
-      :col => scanned.first.last.to_i - 1 }
+    row = SheetUtilities.parse_row(scanned.first.first)
+    col = scanned.first.last.to_i - 1
+    @cells[row][col]
   end
 end
 
@@ -80,6 +92,7 @@ end
 class Formula
   LESS = "Wrong number of arguments for 'FOO': expected at least %s, got %s"
   MORE = "Wrong number of arguments for 'FOO': expected %s, got %s"
+
   attr_accessor :name
   attr_accessor :arguments_count
 
@@ -87,7 +100,7 @@ class Formula
     raise StandardError, 'base class method should not be called'
   end
 
-  def check_arguments
+  def check_arguments(args)
     if args.count < @arguments_count
       raise Spreadsheet::Error, LESS % [@arguments_count, args.count]
     end
@@ -105,6 +118,7 @@ class Add < Formula
   end
 
   def calculate(*args)
+    p args
     args.reduce { |a, b| a + b }
   end
 end
@@ -127,7 +141,7 @@ class Subtract < Formula
   end
 
   def calculate(*args)
-    check_arguments
+    check_arguments(args)
     args.first - args.last
   end
 end
@@ -139,8 +153,8 @@ class Divide < Formula
   end
 
   def calculate(*args)
-    check_arguments
-    args.first / args.last
+    check_arguments(args)
+    args.first.to_f / args.last
   end
 end
 
@@ -151,13 +165,28 @@ class Mod < Formula
   end
 
   def calculate(*args)
-    check_arguments
+    check_arguments(args)
     args.first % args.last
   end
 end
 
-string = "\ncell1\tcell2\tcell3\n\nanother1  another2"
-a = Spreadsheet.new(string)
-p a.cell_at('A1')
-p a['B2']
-p a.to_s
+class FormulaFactory
+  def self.get_formula(name)
+      case name
+      when 'ADD' then Add.new
+      when 'SUBTRACT' then Subtract.new
+      when 'MULTIPLY' then Multiply.new
+      when 'MOD' then Mod.new
+      when 'DIVIDE' then Divide.new
+
+      else raise Spreadsheet::Error, "Unknown function '#{name}'"
+    end
+  end
+end
+
+sheet = Spreadsheet.new <<-TABLE
+  1  2  =DIVIDE(1, B1)
+  4  5  6
+TABLE
+
+p sheet.to_s
