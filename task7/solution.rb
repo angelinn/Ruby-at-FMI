@@ -17,7 +17,7 @@ class Spreadsheet
   def cell_at(cell_index)
     cell = get_by_cell_index(cell_index)
 
-    raise Error, "Cell #{cell_index} does not exist." unless cell
+    raise Error, "Cell '#{cell_index}' does not exist." unless cell
     cell
   end
 
@@ -39,26 +39,29 @@ class Spreadsheet
 
   def calculate_expression(expression)
     return expression if expression[0] != '='
-    matches = expression.match(/^=(\w+)\(((\s*[0-9\w]\s*,?)+)+\)$/)
+    expression.match(/^=(\w+)\(((\s*[0-9\w]\s*,?)+)+\)$/)
 
-    raise Error, "Invalid expression '#{expression}'" if matches.size == 0
-    formula = Formulas.get_formula(matches[1])
+    raise Error, "Invalid expression '#{expression}'" unless $1
+    formula = Formulas.get_formula($1)
 
-    args = matches[2].split(',').map do |argument|
-      argument = get_by_cell_index(argument) if argument =~ /[A-Z]+[0-9]+/
-      argument = argument.strip.to_i
-    end
+    args = formula_to_args($2)
     formula.calculate(*args).to_s
   end
 
-  def get_by_cell_index(cell_index)
-    scanned = cell_index.scan(/([A-Z]+)([0-9]+)/)
-    raise Error, "Invalid index #{cell_index}." if scanned.empty?
+  def formula_to_args(arguments)
+    arguments.split(',').map do |argument|
+      argument = get_by_cell_index(argument) if argument =~ /[A-Z]+[0-9]+/
+      argument = argument.strip.to_i
+    end
+  end
 
-    col = SheetUtilities.parse_row(scanned.first.first)
-    row = scanned.first.last.to_i - 1
-    raise Error, "Cell '#{cell_index}' does not exist." unless SheetUtilities.exists?(cells, row, col)
-    @cells[row][col]
+  def get_by_cell_index(cell_index)
+    cell_index.scan(/([A-Z]+)([0-9]+)/)
+    raise Error, "Invalid index #{cell_index}." unless $1
+    col = SheetUtilities.parse_col($1)
+    row = $2.to_i - 1
+
+    @cells[row][col] rescue nil
   end
 end
 
@@ -74,16 +77,16 @@ class SheetUtilities
     end
   end
 
-  def self.parse_row(row)
+  def self.parse_col(col)
     index = 0
 
-    if row.size > 1
-      row[0..row.size - 2].each_char do |c|
+    if col.size > 1
+      col[0..col.size - 2].each_char do |c|
         index += (c.ord - ('A'.ord - 1)) * ('Z'.ord - 'A'.ord + 1)
       end
     end
 
-    index += row[row.size - 1].ord - ('A'.ord - 1)
+    index += col[col.size - 1].ord - ('A'.ord - 1)
     index.to_i - 1
   end
 
@@ -117,7 +120,7 @@ module Formulas
       end
 
       if args.count > @arguments_count
-      raise Spreadsheet::Error, MORE % [@arguments_count, args.count]
+        raise Spreadsheet::Error, MORE % [@arguments_count, args.count]
       end
     end
   end
