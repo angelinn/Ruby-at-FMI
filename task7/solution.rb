@@ -2,8 +2,6 @@ class Spreadsheet
   class Error < StandardError
   end
 
-  attr_accessor :cells
-
   def initialize(sheet = nil)
     return unless sheet
     @cells = []
@@ -39,7 +37,7 @@ class Spreadsheet
 
   def calculate_expression(expression)
     return expression if expression[0] != '='
-    expression.match(/^=(\w+)\(((\s*[0-9\w]\s*,?)+)+\)$/)
+    expression.match(/(\w+)\(((\s*[0-9A-Z]\s*,?)+)+/)
 
     raise Error, "Invalid expression '#{expression}'" unless $1
     formula = Formulas.get_formula($1)
@@ -57,7 +55,7 @@ class Spreadsheet
 
   def get_by_cell_index(cell_index)
     cell_index.scan(/([A-Z]+)([0-9]+)/)
-    raise Error, "Invalid index #{cell_index}." unless $1
+    raise Error, "Invalid cell index '#{cell_index}'." unless $1
     col = SheetUtilities.parse_col($1)
     row = $2.to_i - 1
 
@@ -69,7 +67,7 @@ class SheetUtilities
   def self.parse_sheet(cells, sheet)
     sheet.strip.split("\n").each do |row|
       next if row.empty?
-      delimiter = row.include?("\t") ? "\t" : "  "
+      delimiter = /#{Regexp.escape(row.include?("\t") ? "\t" : "  ")}+/
 
       current = []
       row.strip.split(delimiter).each { |cell| current << cell.strip }
@@ -89,16 +87,11 @@ class SheetUtilities
     index += col[col.size - 1].ord - ('A'.ord - 1)
     index.to_i - 1
   end
-
-  def self.exists?(cells, row, col)
-    return false unless cells[row]
-    cells[row][col] != nil
-  end
 end
 
 module Formulas
   def self.get_formula(formula)
-    object = Formulas.const_get(formula.downcase.capitalize).new rescue nil
+    object = const_get(formula.downcase.capitalize).new rescue nil
     raise Spreadsheet::Error, "Unknown formula #{formula}" unless object
     object
   end
@@ -107,7 +100,6 @@ module Formulas
     LESS = "Wrong number of arguments for 'FOO': expected at least %s, got %s"
     MORE = "Wrong number of arguments for 'FOO': expected %s, got %s"
 
-    attr_accessor :name
     attr_accessor :arguments_count
 
     def calculate(*args)
@@ -127,7 +119,6 @@ module Formulas
 
   class Add < Formula
     def initialize
-      @name = 'ADD'
       @arguments_count = 0
     end
 
@@ -139,7 +130,6 @@ module Formulas
 
   class Multiply < Formula
     def initialize
-      @name = 'MULTIPLY'
       @arguments_count = 0
     end
 
@@ -150,7 +140,6 @@ module Formulas
 
   class Subtract < Formula
     def initialize
-      @name = 'SUBTRACT'
       @arguments_count = 2
     end
 
@@ -162,7 +151,6 @@ module Formulas
 
   class Divide < Formula
     def initialize
-      @name = 'DIVIDE'
       @arguments_count = 2
     end
 
@@ -174,7 +162,6 @@ module Formulas
 
   class Mod < Formula
     def initialize
-      @name = 'MOD'
       @arguments_count = 2
     end
 
@@ -184,3 +171,11 @@ module Formulas
     end
   end
 end
+
+sheet = Spreadsheet.new <<-TABLE
+  cell1  cell2
+  cell3    cell4
+  cell5\tcell6
+TABLE
+
+p sheet.to_s # => "cell1\tcell2\ncell3\tcell4\ncell5\tcell6"
