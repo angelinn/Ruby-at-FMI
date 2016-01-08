@@ -50,15 +50,15 @@ class Spreadsheet
       argument = get_by_cell_index(argument) if argument =~ /[A-Z]+[0-9]+/
       argument = argument.strip.to_i
     end
-    formula.calculate(*args)
+    formula.calculate(*args).to_s
   end
 
   def get_by_cell_index(cell_index)
     scanned = cell_index.scan(/([A-Z]+)([0-9]+)/)
     raise Error, "Invalid index #{cell_index}." if scanned.empty?
 
-    row = SheetUtilities.parse_row(scanned.first.first)
-    col = scanned.first.last.to_i - 1
+    col = SheetUtilities.parse_row(scanned.first.first)
+    row = scanned.first.last.to_i - 1
     @cells[row][col]
   end
 end
@@ -184,9 +184,3 @@ class FormulaFactory
   end
 end
 
-sheet = Spreadsheet.new <<-TABLE
-  1  2  =DIVIDE(1, B1)
-  4  5  6
-TABLE
-
-p sheet.to_s
