@@ -45,10 +45,6 @@ class Spreadsheet
 end
 
 class SheetUtilities
-  NUMBER = 0
-  CELL = 1
-  FORMULA = 2
-
   def self.parse_sheet(cells, sheet)
     sheet.strip.split("\n").each do |row|
       next if row.empty?
