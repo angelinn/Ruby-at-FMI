@@ -13,7 +13,7 @@ class Spreadsheet
   end
 
   def cell_at(cell_index)
-    cell = get_by_cell_index(cell_index)
+    cell = SheetUtilities.get_by_cell_index(@cells, cell_index)
 
     raise Error, "Cell '#{cell_index}' does not exist." unless cell
     cell
@@ -37,33 +37,18 @@ class Spreadsheet
 
   def calculate_expression(expression)
     return expression if expression[0] != '='
-    expression.match(/(\w+)\(((\s*[0-9A-Z]\s*,?)+)+/)
 
-    raise Error, "Invalid expression '#{expression}'" unless $1
-    formula = Formulas.get_formula($1)
-
-    args = formula_to_args($2)
-    formula.calculate(*args).to_s
-  end
-
-  def formula_to_args(arguments)
-    arguments.split(',').map do |argument|
-      argument = get_by_cell_index(argument) if argument =~ /[A-Z]+[0-9]+/
-      argument = argument.strip.to_i
-    end
-  end
-
-  def get_by_cell_index(cell_index)
-    cell_index.scan(/([A-Z]+)([0-9]+)/)
-    raise Error, "Invalid cell index '#{cell_index}'." unless $1
-    col = SheetUtilities.parse_col($1)
-    row = $2.to_i - 1
-
-    @cells[row][col] rescue nil
+    calculation = SheetUtilities.parse_formula(@cells, expression)
+    raise Error, "Invalid expression '#{expression}'" unless calculation
+    calculation
   end
 end
 
 class SheetUtilities
+  NUMBER = 0
+  CELL = 1
+  FORMULA = 2
+
   def self.parse_sheet(cells, sheet)
     sheet.strip.split("\n").each do |row|
       next if row.empty?
@@ -87,12 +72,41 @@ class SheetUtilities
     index += col[col.size - 1].ord - ('A'.ord - 1)
     index.to_i - 1
   end
+
+  def self.formula_to_args(cells, arguments)
+    arguments.split(',').map do |argument|
+      if argument =~ /[A-Z]+[0-9]+/
+        argument = SheetUtilities.get_by_cell_index(cells, argument)
+      end
+      argument = argument.strip.to_i
+    end
+  end
+
+  def self.parse_formula(cells, expression)
+    if (expression.match(/(\w+)\(((\s*[0-9A-Z]\s*,?)+)+\)/))
+      args = formula_to_args(cells, $2)
+      return Formulas.get_formula($1).calculate(*args).to_s
+    end
+
+    return $1 if expression.match(/^\=(\d+)$/)
+    return get_by_cell_index($1) if expression.match(/^\=(\w+\d+)$/)
+    false
+  end
+
+  def self.get_by_cell_index(cells, cell_index)
+    cell_index.scan(/([A-Z]+)([0-9]+)/)
+    raise Error, "Invalid cell index '#{cell_index}'." unless $1
+    col = SheetUtilities.parse_col($1)
+    row = $2.to_i - 1
+
+    cells[row][col] rescue nil
+  end
 end
 
 module Formulas
   def self.get_formula(formula)
     object = const_get(formula.downcase.capitalize).new rescue nil
-    raise Spreadsheet::Error, "Unknown formula #{formula}" unless object
+    raise Spreadsheet::Error, "Unknown function '#{formula}'" unless object
     object
   end
 
@@ -123,7 +137,6 @@ module Formulas
     end
 
     def calculate(*args)
-      p args
       args.reduce { |a, b| a + b }
     end
   end
@@ -172,10 +185,8 @@ module Formulas
   end
 end
 
-sheet = Spreadsheet.new <<-TABLE
-  cell1  cell2
-  cell3    cell4
-  cell5\tcell6
-TABLE
-
-p sheet.to_s # => "cell1\tcell2\ncell3\tcell4\ncell5\tcell6"
+begin
+  p Spreadsheet.new('=ADD(1, 2)\t=A1').to_s
+rescue Spreadsheet::Error => e
+  p e.message # => "Invalid expression 'ADD(1, 2'"
+end
