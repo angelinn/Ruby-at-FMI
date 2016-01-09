@@ -17,31 +17,22 @@ class Spreadsheet
     cell = @utilities.get_by_cell_index(cell_index)
 
     raise Error, "Cell '#{cell_index}' does not exist." unless cell
-    cell
+    cell.to_s
   end
 
   def [](cell_index)
-    calculate_expression(cell_at(cell_index))
+    @utilities.calculate_expression(cell_at(cell_index))
   end
 
   def to_s
     tab = ""
     @cells.each do |row|
-      row.each { |cell| tab << "#{calculate_expression(cell)}\t" }
+      row.each { |cell| tab << "#{@utilities.calculate_expression(cell)}\t" }
+
       tab.chop!
       tab << "\n"
     end
     tab.chop!
-  end
-
-  private
-
-  def calculate_expression(expression)
-    return expression if expression[0] != '='
-
-    calculation = @utilities.parse_formula(expression)
-    raise Error, "Invalid expression '#{expression}'" unless calculation
-    calculation
   end
 end
 
@@ -74,33 +65,45 @@ class SheetUtilities
     index.to_i - 1
   end
 
-  def formula_to_args(arguments)
+  def extract_args(arguments)
     arguments.split(',').map do |argument|
       if argument =~ /[A-Z]+[0-9]+/
         argument = get_by_cell_index(argument)
       end
-      argument = argument.strip.to_i
+      argument = argument.strip.to_f
     end
   end
 
   def parse_formula(expression)
-    if (expression.match(/(\w+)\(((\s*[0-9A-Z]\s*,?)+)+\)/))
-      args = formula_to_args($2)
-      return Formulas.get_formula($1).calculate(*args).to_s
+    return $1 if expression.match(/^\=([-+]?\d+\.?\d*)+$/)
+    if expression.match(/^\=(\w+\d+)$/)
+      return calculate_expression(get_by_cell_index($1))
     end
 
-    return $1 if expression.match(/^\=(\d+)$/)
-    return get_by_cell_index($1) if expression.match(/^\=(\w+\d+)$/)
+    if expression.match(/(\w+)\(((\s*[-+]?[0-9A-Z]\.?\s*,?)+)+\)/)
+      return Formulas.get_formula($1).calculate(*extract_args($2))
+    end
     false
   end
 
   def get_by_cell_index(cell_index)
     cell_index.scan(/([A-Z]+)([0-9]+)/)
-    raise Error, "Invalid cell index '#{cell_index}'." unless $1
+    raise Spreadsheet::Error, "Invalid cell index '#{cell_index}'." unless $1
+
     col = parse_col($1)
     row = $2.to_i - 1
 
     @cells[row][col] rescue nil
+  end
+
+  def calculate_expression(expression)
+    return expression if expression[0] != '='
+
+    calculation = parse_formula(expression)
+    unless calculation
+      raise Spreadsheet::Error, "Invalid expression '#{expression}'"
+    end
+    calculation.to_s
   end
 end
 
@@ -118,6 +121,12 @@ module Formulas
     attr_accessor :arguments_count
 
     def calculate(*args)
+      check_arguments(args) unless arguments_count == 0
+      calculation = algorithm(*args).to_f
+      (calculation % 1 == 0.0) ? calculation.to_i : format('%.2f', calculation)
+    end
+
+    def algorithm(*args)
       raise StandardError, 'base class method should not be called'
     end
 
@@ -137,7 +146,7 @@ module Formulas
       @arguments_count = 0
     end
 
-    def calculate(*args)
+    def algorithm(*args)
       args.reduce { |a, b| a + b }
     end
   end
@@ -147,7 +156,7 @@ module Formulas
       @arguments_count = 0
     end
 
-    def calculate(*args)
+    def algorithm(*args)
       args.reduce { |a, b| a * b }
     end
   end
@@ -157,8 +166,7 @@ module Formulas
       @arguments_count = 2
     end
 
-    def calculate(*args)
-      check_arguments(args)
+    def algorithm(*args)
       args.first - args.last
     end
   end
@@ -168,9 +176,8 @@ module Formulas
       @arguments_count = 2
     end
 
-    def calculate(*args)
-      check_arguments(args)
-      args.first.to_f / args.last
+    def algorithm(*args)
+      args.first / args.last
     end
   end
 
@@ -179,15 +186,14 @@ module Formulas
       @arguments_count = 2
     end
 
-    def calculate(*args)
-      check_arguments(args)
+    def algorithm(*args)
       args.first % args.last
     end
   end
 end
 
 begin
-  p Spreadsheet.new('=ADD(1, 2)\t=A1').to_s
+  p Spreadsheet.new("=MULTIPLY(1.5, 2.5, 6.5, 7.5)\t=A1\t10.5").to_s
 rescue Spreadsheet::Error => e
   p e.message # => "Invalid expression 'ADD(1, 2'"
 end
